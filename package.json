@@ -10,13 +10,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./match": {
-      "types": "./dist/match.d.ts",
-      "import": "./dist/match.js"
-    },
     "./locale/jp": {
-      "types": "./dist/locale/jp.d.ts",
-      "import": "./dist/locale/jp.js"
+      "types": "./dist/locale/jp/index.d.ts",
+      "import": "./dist/locale/jp/index.js"
     }
   },
   "files": [
@@ -28,18 +24,33 @@
   "sideEffects": false,
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "lint": "biome lint src examples",
+    "format": "biome format --write src examples",
+    "format:check": "biome format src examples",
+    "check": "biome check src examples",
+    "check:fix": "biome check --write src examples",
+    "example:basic": "tsx examples/basic.ts",
+    "example:ferry": "tsx examples/ferry.ts",
+    "example:business-days": "tsx examples/business-days.ts",
+    "example:match": "tsx examples/match.ts",
+    "example:era": "tsx examples/japanese-era.ts",
+    "example:bar": "tsx examples/business/bar.ts",
+    "example:etc": "tsx examples/business/etc.ts",
+    "example:garbage": "tsx examples/business/garbage.ts",
+    "example:kaikatsu": "tsx examples/business/kaikatsu.ts",
+    "example:karaoke": "tsx examples/business/karaoke.ts"
   },
   "license": "MIT",
-  "author": "Ryosuke Ohta <ryosuke.ohta@turing-motors.com>",
+  "author": "Ryosuke Ohta <kanade.k.1228@gmail.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kanade-k-1228/datex.git"
+    "url": "git+https://github.com/kanade-k-1228/koyomify.git"
   },
   "bugs": {
-    "url": "https://github.com/kanade-k-1228/datex/issues"
+    "url": "https://github.com/kanade-k-1228/koyomify/issues"
   },
-  "homepage": "https://github.com/kanade-k-1228/datex#readme",
+  "homepage": "https://github.com/kanade-k-1228/koyomify#readme",
   "publishConfig": {
     "access": "public"
   },
@@ -64,7 +75,10 @@
     }
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.4.14",
     "@holiday-jp/holiday_jp": "^2.4.0",
+    "picocolors": "^1.1.1",
+    "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   }
 }

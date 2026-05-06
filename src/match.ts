@@ -1,73 +1,117 @@
-// koyomify/match — koyomify 用の JS オブジェクトベース日付マッチルール
-//
-// ルールはネスト可能な JS オブジェクトで表現し、キーは条件式、値はそのまま返す
-// 値（leaf）または更にネストしたルールオブジェクト。挿入順に上から評価する。
-// オブジェクト形式なので JSON / YAML などからパースしたものも、TS リテラル
-// として直接書いたものも、同じ shape であればそのまま受け付けられる。
-//   - キー '_' は常に真（else / default 相当）
-//   - 親条件にマッチしてもネストした子で何も決まらない場合は、親の兄弟へフォールスルー
-
-import type { Day } from './index.js';
+import { Day, type Operator } from "./core.js";
 import {
-  day as dom, week as dow, month, year,
-  shift, inRange, nthDow,
-  isWeekend, isWeekday,
-} from './index.js';
-
-export type Value = string | number | boolean | null;
-export type Predicate = (d: Day) => boolean;
-
-export type Rule = Value | RuleMap;
-export interface RuleMap { [cond: string]: Rule }
-
-export interface CompileOptions {
-  /**
-   * `holiday` などの述語名を関数に解決するためのテーブル。
-   * 曜日名 (`monday`...`sunday`) / `weekend` / `weekday` / `isWeekend` /
-   * `isWeekday` は組み込み。
-   */
-  predicates?: Record<string, Predicate>;
-}
-
-const BUILTIN_PREDS: Record<string, Predicate> = {
-  weekend: isWeekend,
-  weekday: isWeekday,
-  isWeekend,
+  beginOfMonth,
+  beginOfYear,
+  day,
+  endOfMonth,
+  endOfYear,
+  isFriday,
+  isMonday,
+  isSaturday,
+  isSunday,
+  isThursday,
+  isTuesday,
+  isWednesday,
   isWeekday,
-  sunday:    (d) => dow(d) === 0,
-  monday:    (d) => dow(d) === 1,
-  tuesday:   (d) => dow(d) === 2,
-  wednesday: (d) => dow(d) === 3,
-  thursday:  (d) => dow(d) === 4,
-  friday:    (d) => dow(d) === 5,
-  saturday:  (d) => dow(d) === 6,
+  isWeekend,
+  month,
+  nthDay,
+  nthMonth,
+  nthWeek,
+  range,
+  year,
+} from "./operators.js";
+
+// ---------------------------------------------------------------------------
+// Public API
+
+export type Pattern<T> = T | { [cond: string]: Pattern<T> };
+
+export type EnvFn =
+  | Operator<Day>
+  | Operator<boolean>
+  | ((...args: any[]) => Operator<Day>)
+  | ((...args: any[]) => Operator<boolean>);
+
+export const matcher = <T>(
+  pat: Pattern<T>,
+  env: Record<string, EnvFn> = {},
+): ((d: Day) => Result<T>) => {
+  const merged: Record<string, EnvFn> = { ...BUILTIN, ...env };
+  const tree = compile<T>(pat, merged);
+  return (d) => evaluate(tree, d);
 };
 
-// ---- Condition string parser -----------------------------------------
+// ---------------------------------------------------------------------------
+// Pattern tree
+
+type CompiledPattern<T> =
+  | { kind: "leaf"; value: T }
+  | { kind: "node"; pattern: { cond: Operator<boolean>; rule: CompiledPattern<T> }[] };
+
+type Result<T> = { result: true; value: T } | { result: false };
+
+const compile = <T>(pat: Pattern<T>, env: Record<string, EnvFn>): CompiledPattern<T> => {
+  if (pat === null || typeof pat !== "object") {
+    return { kind: "leaf", value: pat as T };
+  }
+  if (Array.isArray(pat)) {
+    throw new Error("[koyomify/match] arrays are not valid pattern values");
+  }
+  const pattern: { cond: Operator<boolean>; rule: CompiledPattern<T> }[] = [];
+  for (const [key, sub] of Object.entries(pat as Record<string, Pattern<T>>)) {
+    pattern.push({
+      cond: compileCond(key, env),
+      rule: compile<T>(sub, env),
+    });
+  }
+  return { kind: "node", pattern };
+};
+
+const evaluate = <T>(tree: CompiledPattern<T>, d: Day): Result<T> => {
+  if (tree.kind === "leaf") return { result: true, value: tree.value };
+  for (const c of tree.pattern) {
+    if (c.cond(d)) {
+      const r = evaluate(c.rule, d);
+      if (r.result) return r;
+    }
+  }
+  return { result: false };
+};
+
+// ---------------------------------------------------------------------------
+// Cond parser
 //
-// 文法（簡略）:
-//   cond     := shift* atom modifier*
-//   shift    := ('prev' | 'next') '.'
-//   atom     := IDENT | IDENT '(' args? ')'
-//   args     := value (',' value)*
-//   value    := STRING | DATE | NUMBER
-//   modifier := '.' IDENT      // 現在 '.not' のみ
-//   IDENT    := [a-zA-Z_][a-zA-Z_0-9]*
+//   cond     := '*' | ?( '!' ) op % '.'
+//   operator := range | ident ?( '(' params ')' )
+//   range    := date ?( '..' date )
+//   params   := value % ','
+//   value    := date | number
+//   date     := yyyy-mm-dd
+//   ident    := [a-zA-Z_][a-zA-Z_0-9]*
+//
 
-const compileCond = (
-  src: string,
-  preds: Record<string, Predicate>,
-): Predicate => {
-  if (src === '_') return () => true;
+// 内部 AST: 1 個の op
+type Op = { name: string; args: (string | number)[] };
 
+// 内部: 引数つきファクトリ（shift か predicate を返す）
+type Factory<T> = (...args: (string | number)[]) => Operator<T>;
+
+const compileCond = (src: string, env: Record<string, EnvFn>): Operator<boolean> => {
+  if (src === "*") return () => true;
+  const [negate, ops] = parseCond(src);
+  return composeOps(negate, ops, src, env);
+};
+
+// 構文解析: src → [negate, Op[]]
+const parseCond = (src: string): [boolean, Op[]] => {
   let i = 0;
   const n = src.length;
 
   const skipSpace = (): void => {
     while (i < n && /\s/.test(src[i]!)) i++;
   };
-
-  const peek = (): string => (i < n ? src[i]! : '');
+  const peek = (): string => (i < n ? src[i]! : "");
 
   const parseIdent = (): string => {
     skipSpace();
@@ -82,214 +126,176 @@ const compileCond = (
     return src.slice(start, i);
   };
 
-  const parseArg = (): string | number => {
+  // value := date | number。日付らしい形なら文字列のまま、それ以外は number。
+  const parseValue = (): string | number => {
     skipSpace();
-    const c = peek();
-    if (c === "'" || c === '"') {
-      const quote = c;
-      i++;
-      const start = i;
-      while (i < n && src[i] !== quote) i++;
-      if (i >= n) {
-        throw new Error(`[koyomify/match] unterminated string in "${src}"`);
-      }
-      const s = src.slice(start, i);
-      i++;
-      return s;
+    const start = i;
+    if (i < n && src[i] === "-") i++;
+    if (i >= n || !/\d/.test(src[i]!)) {
+      throw new Error(`[koyomify/match] expected value in "${src}" at offset ${i}`);
     }
-    if (/[\d-]/.test(c)) {
-      const start = i;
-      // 数値または ISO 日付。'-' と数字の連なりを丸ごと取り、形を見て判別する
-      if (src[i] === '-') i++;
-      while (i < n && /[\d-]/.test(src[i]!)) i++;
-      const raw = src.slice(start, i);
-      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-      const num = Number(raw);
-      if (!Number.isFinite(num)) {
-        throw new Error(`[koyomify/match] invalid number/date "${raw}" in "${src}"`);
-      }
-      return num;
+    while (i < n && /[\d-]/.test(src[i]!)) i++;
+    const raw = src.slice(start, i);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    const num = Number(raw);
+    if (!Number.isFinite(num)) {
+      throw new Error(`[koyomify/match] invalid number/date "${raw}" in "${src}"`);
     }
-    throw new Error(`[koyomify/match] expected value in "${src}" at offset ${i}`);
+    return num;
   };
 
-  const parseArgs = (): (string | number)[] => {
+  // params := value % ','。'(' は呼び出し側で消費済み。
+  const parseParams = (): (string | number)[] => {
+    const params: (string | number)[] = [];
     skipSpace();
-    if (peek() !== '(') {
-      throw new Error(`[koyomify/match] expected '(' in "${src}"`);
-    }
-    i++;
-    const args: (string | number)[] = [];
-    skipSpace();
-    while (peek() !== ')') {
-      args.push(parseArg());
+    while (peek() !== ")") {
+      params.push(parseValue());
       skipSpace();
-      if (peek() === ',') { i++; skipSpace(); }
+      if (peek() === ",") {
+        i++;
+        skipSpace();
+      }
     }
-    i++;
-    return args;
+    i++; // consume ')'
+    return params;
   };
 
-  // 1) 先頭の prev. / next. シフト（連結可能）
-  let shiftDays = 0;
-  while (true) {
-    skipSpace();
-    if (src.startsWith('prev.', i)) { shiftDays--; i += 5; continue; }
-    if (src.startsWith('next.', i)) { shiftDays++; i += 5; continue; }
-    break;
-  }
+  const dateRe = /^(\d{4}-\d{2}-\d{2})(?:\.\.(\d{4}-\d{2}-\d{2}))?/;
 
-  // 2) atom（識別子 or 関数呼び出し）
-  const head = parseIdent();
-  let pred: Predicate;
+  // op := range | ident ?( '(' params ')' )
+  const parseOp = (): Op => {
+    skipSpace();
+    const m = dateRe.exec(src.slice(i));
+    if (m) {
+      i += m[0].length;
+      return { name: "range", args: [m[1]!, m[2] ?? m[1]!] };
+    }
+    const name = parseIdent();
+    skipSpace();
+    if (peek() === "(") {
+      i++;
+      return { name, args: parseParams() };
+    }
+    return { name, args: [] };
+  };
+
+  // 先頭の '!' は述語の真偽反転フラグ
   skipSpace();
-  if (peek() === '(') {
-    pred = makeFnPred(head, parseArgs(), src);
-  } else {
-    const fn = preds[head];
-    if (!fn) {
-      throw new Error(
-        `[koyomify/match] predicate '${head}' is not registered (from "${src}"). ` +
-        `Pass it via compile(rules, { predicates: { ${head}: fn } }).`,
-      );
-    }
-    pred = fn;
+  let negate = false;
+  if (peek() === "!") {
+    negate = true;
+    i++;
   }
 
-  // 3) 後続の修飾子（現状 .not のみ）
+  // cond rest := op % '.'
+  const ops: Op[] = [parseOp()];
   while (true) {
     skipSpace();
-    if (peek() !== '.') break;
+    if (peek() !== ".") break;
     i++;
-    const mod = parseIdent();
-    if (mod === 'not') {
-      const inner = pred;
-      pred = (d) => !inner(d);
-    } else {
-      throw new Error(`[koyomify/match] unknown modifier '.${mod}' in "${src}"`);
-    }
+    ops.push(parseOp());
   }
-
-  if (shiftDays !== 0) {
-    const inner = pred;
-    const days = shiftDays;
-    pred = (d) => inner(shift(days)(d));
-  }
-
   skipSpace();
   if (i < n) {
     throw new Error(`[koyomify/match] unexpected trailing input in "${src}" at offset ${i}`);
   }
-  return pred;
+  return [negate, ops];
 };
 
-const toInt = (v: string | number, name: string, src: string): number => {
-  const n = typeof v === 'string' ? Number(v) : v;
+// Op[] → Operator<boolean>。
+// pipeline は shift* predicate の形で、最後の op が必ず述語（それ以前は shift）。
+// 各 op は env から引いた関数を probe で走らせ、戻り値が Day なら shift、boolean なら predicate。
+const composeOps = (
+  negate: boolean,
+  ops: Op[],
+  src: string,
+  env: Record<string, EnvFn>,
+): Operator<boolean> => {
+  const lookup = (name: string): EnvFn => {
+    const fn = env[name];
+    if (!fn) {
+      throw new Error(
+        `[koyomify/match] '${name}' is not registered (from "${src}"). ` +
+          `Pass it via matcher(rules, { ${name}: fn }).`,
+      );
+    }
+    return fn;
+  };
+
+  const shifts: Operator<Day>[] = [];
+  let predicate: Operator<boolean> | null = null;
+  const probe = new Day("2000-01-01");
+
+  for (const op of ops) {
+    if (predicate !== null) {
+      throw new Error(`[koyomify/match] op after predicate in "${src}" at '${op.name}'`);
+    }
+    const entry = lookup(op.name);
+    const fn: (d: Day) => unknown =
+      op.args.length > 0
+        ? (entry as Factory<Day | boolean>)(...op.args)
+        : (entry as (d: Day) => unknown);
+
+    const r = fn(probe);
+    if (r instanceof Day) {
+      shifts.push(fn as Operator<Day>);
+    } else if (typeof r === "boolean") {
+      predicate = fn as Operator<boolean>;
+    } else {
+      throw new Error(
+        `[koyomify/match] '${op.name}' is neither a shift nor a predicate (in "${src}")`,
+      );
+    }
+  }
+  if (predicate === null) throw new Error(`[koyomify/match] empty pipeline in "${src}"`);
+
+  const finalPred = predicate;
+  return (d) => {
+    let day = d;
+    for (const sh of shifts) day = sh(day);
+    const b = finalPred(day);
+    return negate ? !b : b;
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Builtin Operators
+//
+// shift / predicate / factory が混在する 1 つのテーブル。
+// ユーザー提供の env も同じ shape で混ぜられる（matcher() で merge）。
+
+const toInt = (v: string | number, name: string): number => {
+  const n = typeof v === "string" ? Number(v) : v;
   if (!Number.isFinite(n) || !Number.isInteger(n)) {
-    throw new Error(`[koyomify/match] ${name}: expected integer, got ${JSON.stringify(v)} in "${src}"`);
+    throw new Error(`[koyomify/match] ${name}: expected integer, got ${JSON.stringify(v)}`);
   }
   return n;
 };
 
-const makeFnPred = (
-  name: string,
-  args: (string | number)[],
-  src: string,
-): Predicate => {
-  switch (name) {
-    case 'range': {
-      if (args.length !== 2 || typeof args[0] !== 'string' || typeof args[1] !== 'string') {
-        throw new Error(`[koyomify/match] range(from, to) expects two date strings in "${src}"`);
-      }
-      return inRange(args[0], args[1]);
-    }
-    case 'nth': {
-      if (args.length !== 2) {
-        throw new Error(`[koyomify/match] nth(n, w) expects 2 integers in "${src}"`);
-      }
-      const nv = toInt(args[0]!, 'nth', src);
-      const wv = toInt(args[1]!, 'nth', src);
-      return nthDow(nv, wv);
-    }
-    case 'dow': {
-      const vs = args.map(a => toInt(a, 'dow', src));
-      return (d) => vs.includes(dow(d));
-    }
-    case 'dom': {
-      const vs = args.map(a => toInt(a, 'dom', src));
-      return (d) => vs.includes(dom(d));
-    }
-    case 'month': {
-      const vs = args.map(a => toInt(a, 'month', src));
-      return (d) => vs.includes(month(d));
-    }
-    case 'year': {
-      const vs = args.map(a => toInt(a, 'year', src));
-      return (d) => vs.includes(year(d));
-    }
-    default:
-      throw new Error(`[koyomify/match] unknown function '${name}' in "${src}"`);
-  }
+const BUILTIN: Record<string, EnvFn> = {
+  // Day => Day
+  year,
+  month,
+  day,
+  beginOfMonth,
+  endOfMonth,
+  beginOfYear,
+  endOfYear,
+
+  // Day => boolean
+  range,
+
+  nthWeek,
+  nthMonth,
+  nthDay,
+
+  isWeekend,
+  isWeekday,
+  isSunday,
+  isMonday,
+  isTuesday,
+  isWednesday,
+  isThursday,
+  isFriday,
+  isSaturday,
 };
-
-// ---- Compiled rule tree ----------------------------------------------
-
-type CompiledRule =
-  | { kind: 'leaf'; value: Value }
-  | { kind: 'branch'; cases: { pred: Predicate; rule: CompiledRule }[] };
-
-const compileTree = (
-  rule: Rule,
-  preds: Record<string, Predicate>,
-): CompiledRule => {
-  if (rule === null || typeof rule !== 'object') {
-    return { kind: 'leaf', value: rule };
-  }
-  if (Array.isArray(rule)) {
-    throw new Error('[koyomify/match] arrays are not valid rule values');
-  }
-  const cases: { pred: Predicate; rule: CompiledRule }[] = [];
-  for (const [key, sub] of Object.entries(rule)) {
-    cases.push({
-      pred: compileCond(key, preds),
-      rule: compileTree(sub, preds),
-    });
-  }
-  return { kind: 'branch', cases };
-};
-
-type EvalResult = { matched: true; value: Value } | { matched: false };
-
-const runTree = (tree: CompiledRule, d: Day): EvalResult => {
-  if (tree.kind === 'leaf') return { matched: true, value: tree.value };
-  for (const c of tree.cases) {
-    if (c.pred(d)) {
-      const r = runTree(c.rule, d);
-      if (r.matched) return r;
-    }
-  }
-  return { matched: false };
-};
-
-// ---- Public API ------------------------------------------------------
-
-export const compile = (
-  rule: Rule,
-  options: CompileOptions = {},
-): ((d: Day) => Value) => {
-  const preds = { ...BUILTIN_PREDS, ...options.predicates };
-  const tree = compileTree(rule, preds);
-  return (d) => {
-    const r = runTree(tree, d);
-    if (!r.matched) {
-      throw new Error(`[koyomify/match] no rule matched for ${d.toString()}`);
-    }
-    return r.value;
-  };
-};
-
-export const evaluate = (
-  rule: Rule,
-  d: Day,
-  options: CompileOptions = {},
-): Value => compile(rule, options)(d);
