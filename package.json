@@ -1,5 +1,5 @@
 {
-  "name": "datex",
+  "name": "koyomify",
   "version": "0.1.0",
   "description": "A small, pipeline-style calendar library built around an immutable Day class.",
   "type": "module",

@@ -1,4 +1,4 @@
-// datex/match — datex 用の JS オブジェクトベース日付マッチルール
+// koyomify/match — koyomify 用の JS オブジェクトベース日付マッチルール
 //
 // ルールはネスト可能な JS オブジェクトで表現し、キーは条件式、値はそのまま返す
 // 値（leaf）または更にネストしたルールオブジェクト。挿入順に上から評価する。
@@ -77,7 +77,7 @@ const compileCond = (
       while (i < n && /[a-zA-Z_0-9]/.test(src[i]!)) i++;
     }
     if (start === i) {
-      throw new Error(`[datex/match] expected identifier at offset ${i} of "${src}"`);
+      throw new Error(`[koyomify/match] expected identifier at offset ${i} of "${src}"`);
     }
     return src.slice(start, i);
   };
@@ -91,7 +91,7 @@ const compileCond = (
       const start = i;
       while (i < n && src[i] !== quote) i++;
       if (i >= n) {
-        throw new Error(`[datex/match] unterminated string in "${src}"`);
+        throw new Error(`[koyomify/match] unterminated string in "${src}"`);
       }
       const s = src.slice(start, i);
       i++;
@@ -106,17 +106,17 @@ const compileCond = (
       if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
       const num = Number(raw);
       if (!Number.isFinite(num)) {
-        throw new Error(`[datex/match] invalid number/date "${raw}" in "${src}"`);
+        throw new Error(`[koyomify/match] invalid number/date "${raw}" in "${src}"`);
       }
       return num;
     }
-    throw new Error(`[datex/match] expected value in "${src}" at offset ${i}`);
+    throw new Error(`[koyomify/match] expected value in "${src}" at offset ${i}`);
   };
 
   const parseArgs = (): (string | number)[] => {
     skipSpace();
     if (peek() !== '(') {
-      throw new Error(`[datex/match] expected '(' in "${src}"`);
+      throw new Error(`[koyomify/match] expected '(' in "${src}"`);
     }
     i++;
     const args: (string | number)[] = [];
@@ -149,7 +149,7 @@ const compileCond = (
     const fn = preds[head];
     if (!fn) {
       throw new Error(
-        `[datex/match] predicate '${head}' is not registered (from "${src}"). ` +
+        `[koyomify/match] predicate '${head}' is not registered (from "${src}"). ` +
         `Pass it via compile(rules, { predicates: { ${head}: fn } }).`,
       );
     }
@@ -166,7 +166,7 @@ const compileCond = (
       const inner = pred;
       pred = (d) => !inner(d);
     } else {
-      throw new Error(`[datex/match] unknown modifier '.${mod}' in "${src}"`);
+      throw new Error(`[koyomify/match] unknown modifier '.${mod}' in "${src}"`);
     }
   }
 
@@ -178,7 +178,7 @@ const compileCond = (
 
   skipSpace();
   if (i < n) {
-    throw new Error(`[datex/match] unexpected trailing input in "${src}" at offset ${i}`);
+    throw new Error(`[koyomify/match] unexpected trailing input in "${src}" at offset ${i}`);
   }
   return pred;
 };
@@ -186,7 +186,7 @@ const compileCond = (
 const toInt = (v: string | number, name: string, src: string): number => {
   const n = typeof v === 'string' ? Number(v) : v;
   if (!Number.isFinite(n) || !Number.isInteger(n)) {
-    throw new Error(`[datex/match] ${name}: expected integer, got ${JSON.stringify(v)} in "${src}"`);
+    throw new Error(`[koyomify/match] ${name}: expected integer, got ${JSON.stringify(v)} in "${src}"`);
   }
   return n;
 };
@@ -199,13 +199,13 @@ const makeFnPred = (
   switch (name) {
     case 'range': {
       if (args.length !== 2 || typeof args[0] !== 'string' || typeof args[1] !== 'string') {
-        throw new Error(`[datex/match] range(from, to) expects two date strings in "${src}"`);
+        throw new Error(`[koyomify/match] range(from, to) expects two date strings in "${src}"`);
       }
       return inRange(args[0], args[1]);
     }
     case 'nth': {
       if (args.length !== 2) {
-        throw new Error(`[datex/match] nth(n, w) expects 2 integers in "${src}"`);
+        throw new Error(`[koyomify/match] nth(n, w) expects 2 integers in "${src}"`);
       }
       const nv = toInt(args[0]!, 'nth', src);
       const wv = toInt(args[1]!, 'nth', src);
@@ -228,7 +228,7 @@ const makeFnPred = (
       return (d) => vs.includes(year(d));
     }
     default:
-      throw new Error(`[datex/match] unknown function '${name}' in "${src}"`);
+      throw new Error(`[koyomify/match] unknown function '${name}' in "${src}"`);
   }
 };
 
@@ -246,7 +246,7 @@ const compileTree = (
     return { kind: 'leaf', value: rule };
   }
   if (Array.isArray(rule)) {
-    throw new Error('[datex/match] arrays are not valid rule values');
+    throw new Error('[koyomify/match] arrays are not valid rule values');
   }
   const cases: { pred: Predicate; rule: CompiledRule }[] = [];
   for (const [key, sub] of Object.entries(rule)) {
@@ -282,7 +282,7 @@ export const compile = (
   return (d) => {
     const r = runTree(tree, d);
     if (!r.matched) {
-      throw new Error(`[datex/match] no rule matched for ${d.toString()}`);
+      throw new Error(`[koyomify/match] no rule matched for ${d.toString()}`);
     }
     return r.value;
   };

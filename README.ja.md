@@ -1,4 +1,4 @@
-# datex
+# koyomify
 
 [English](./README.md) | **日本語**
 
@@ -9,8 +9,8 @@
 `Day` クラス本体は最小（不変な日付の箱 + パイプライン応用口 `.$` のみ）。取得・シフト・述語・比較などはすべて外部の純関数として export されており、`d.$(month(+2)).$(beginOfMonth)` のように合成する。
 
 ```ts
-import { datex, month, beginOfMonth, isWeekend } from 'datex';
-import { isHoliday } from 'datex/locale/jp';
+import { datex, month, beginOfMonth, isWeekend } from 'koyomify';
+import { isHoliday } from 'koyomify/locale/jp';
 
 datex('2026-01-31').$(month(+1)).$(beginOfMonth).toString();  // '2026-02-01'
 datex('2026-01-01').$(isHoliday);                             // true
@@ -20,27 +20,27 @@ datex('2026-04-18').$(isWeekend);                             // true
 ## インストール
 
 ```sh
-npm install datex
-# 'datex/locale/jp' を import するときだけ必要
+npm install koyomify
+# 'koyomify/locale/jp' を import するときだけ必要
 npm install @holiday-jp/holiday_jp
 ```
 
-`@holiday-jp/holiday_jp` は **optional な peerDependency**。`datex/locale/jp` を import しなければインストール不要。
+`@holiday-jp/holiday_jp` は **optional な peerDependency**。`koyomify/locale/jp` を import しなければインストール不要。
 
 ## サブパス
 
 | パス                | 説明                                                                       |
 | ------------------- | -------------------------------------------------------------------------- |
-| `datex`             | コア: `Day` クラス + パイプライン関数群（runtime 依存ゼロ）                |
-| `datex/match`       | プレーン JS オブジェクト形式の日付マッチルールエンジン（JSON / YAML から読み込んだものでも可）（runtime 依存ゼロ）|
-| `datex/locale/jp`    | 日本固有の述語・ヘルパー（`@holiday-jp/holiday_jp` の peerDep）           |
-| `datex/locale/<cc>`  | 各国向けサブパス。同じ形で増やしていく（`us`、`uk` など）                 |
+| `koyomify`             | コア: `Day` クラス + パイプライン関数群（runtime 依存ゼロ）                |
+| `koyomify/match`       | プレーン JS オブジェクト形式の日付マッチルールエンジン（JSON / YAML から読み込んだものでも可）（runtime 依存ゼロ）|
+| `koyomify/locale/jp`    | 日本固有の述語・ヘルパー（`@holiday-jp/holiday_jp` の peerDep）           |
+| `koyomify/locale/<cc>`  | 各国向けサブパス。同じ形で増やしていく（`us`、`uk` など）                 |
 
 ## クイックスタート
 
 ```ts
-import { datex, type Day, isWeekend, inRange, week, prev } from 'datex';
-import { isHoliday } from 'datex/locale/jp';
+import { datex, type Day, isWeekend, inRange, week, prev } from 'koyomify';
+import { isHoliday } from 'koyomify/locale/jp';
 
 const ferry = (d: Day): string =>
   d.$(inRange('2026-07-28', '2026-08-31')) && (
@@ -135,7 +135,7 @@ d2 - d1           // 日数差（number）
 d1.$(eq(d2))      // 同値判定（推奨：=== は厳密比較）
 ```
 
-## API: コア (`datex`)
+## API: コア (`koyomify`)
 
 ### コンストラクタ
 
@@ -161,14 +161,14 @@ d1.$(eq(d2))      // 同値判定（推奨：=== は厳密比較）
 
 `eq(other)`、`before(other)`、`after(other)`、`daysTo(other)`、`sameMonth(other)`、`sameYear(other)`。
 
-## サブパス: `datex/match` — 日付マッチルールエンジン
+## サブパス: `koyomify/match` — 日付マッチルールエンジン
 
 設定駆動でルールを書ける。受け付けるのはプレーンな JS オブジェクト — TS のリテラルとして直接書いても、JSON / YAML / TOML などからパースして読み込んでも、shape さえ合えばそのまま渡せる。各キーは条件式（文字列）、値は leaf 結果かネストしたルールオブジェクト。上から評価し、最初に一致したキーが勝つ。`_` キーは default 分岐。
 
 ```ts
-import { datex } from 'datex';
-import { compile } from 'datex/match';
-import { isHoliday } from 'datex/locale/jp';
+import { datex } from 'koyomify';
+import { compile } from 'koyomify/match';
+import { isHoliday } from 'koyomify/locale/jp';
 
 const ferry = compile({
   'range("2026-07-28", "2026-08-31")': {
@@ -223,7 +223,7 @@ compile(rule, { predicates: { rainy: isRainy } });
 
 ```ts
 import yaml from 'yaml';
-import { compile } from 'datex/match';
+import { compile } from 'koyomify/match';
 
 const rule = yaml.parse(await fs.readFile('schedule.yml', 'utf8'));
 const ferry = compile(rule, { predicates: { isHoliday } });
@@ -239,11 +239,11 @@ weekend: B
 _:       A
 ```
 
-## サブパス: `datex/locale/<country>`
+## サブパス: `koyomify/locale/<country>`
 
-国固有の述語・ヘルパーは `datex/locale/<cc>` 配下に置く。新しい国を追加してもコアや他国に影響しない設計。現状 ship されているのは:
+国固有の述語・ヘルパーは `koyomify/locale/<cc>` 配下に置く。新しい国を追加してもコアや他国に影響しない設計。現状 ship されているのは:
 
-### `datex/locale/jp`（日本）
+### `koyomify/locale/jp`（日本）
 
 [`@holiday-jp/holiday_jp`](https://github.com/holiday-jp/holiday_jp-js) を使った日本固有の述語 `(d: Day) => boolean`。利用時のみ peer dep を入れる:
 
@@ -252,8 +252,8 @@ npm install @holiday-jp/holiday_jp
 ```
 
 ```ts
-import { datex } from 'datex';
-import { isHoliday } from 'datex/locale/jp';
+import { datex } from 'koyomify';
+import { isHoliday } from 'koyomify/locale/jp';
 
 datex('2026-01-01').$(isHoliday);  // true (元日)
 datex('2026-05-04').$(isHoliday);  // true (みどりの日)
@@ -266,21 +266,21 @@ datex('2026-05-06').$(isHoliday);  // true (振替休日)
 
 ```ts
 import Holidays from 'date-holidays';
-import type { Day } from 'datex';
+import type { Day } from 'koyomify';
 
 const us = new Holidays('US');
 export const isHolidayUS = (d: Day): boolean => Boolean(us.isHoliday(d.toDate()));
 ```
 
-`datex` 本体に同梱したい場合は `src/locale/<cc>.ts` で `(d: Day) => T` を export する形で contribute する（`datex/locale/jp` と同じ shape）。
+`koyomify` 本体に同梱したい場合は `src/locale/<cc>.ts` で `(d: Day) => T` を export する形で contribute する（`koyomify/locale/jp` と同じ shape）。
 
 ## レシピ集
 
 ### 月末営業日
 
 ```ts
-import { datex, type Day, endOfMonth, prev, isWeekend, eq } from 'datex';
-import { isHoliday } from 'datex/locale/jp';
+import { datex, type Day, endOfMonth, prev, isWeekend, eq } from 'koyomify';
+import { isHoliday } from 'koyomify/locale/jp';
 
 const isLastBusinessDayOfMonth = (d: Day): boolean => {
   let last = d.$(endOfMonth);
@@ -292,8 +292,8 @@ const isLastBusinessDayOfMonth = (d: Day): boolean => {
 ### 翌月の第 1 営業日
 
 ```ts
-import { datex, type Day, month, beginOfMonth, next, isWeekend } from 'datex';
-import { isHoliday } from 'datex/locale/jp';
+import { datex, type Day, month, beginOfMonth, next, isWeekend } from 'koyomify';
+import { isHoliday } from 'koyomify/locale/jp';
 
 const firstBusinessDayOfNextMonth = (d: Day): Day => {
   let x = d.$(month(+1)).$(beginOfMonth);
@@ -305,8 +305,8 @@ const firstBusinessDayOfNextMonth = (d: Day): Day => {
 ### N 営業日後
 
 ```ts
-import { datex, type Day, next, isWeekend } from 'datex';
-import { isHoliday } from 'datex/locale/jp';
+import { datex, type Day, next, isWeekend } from 'koyomify';
+import { isHoliday } from 'koyomify/locale/jp';
 
 const addBusinessDays = (d: Day, n: number): Day => {
   let cursor = d;
@@ -322,8 +322,8 @@ const addBusinessDays = (d: Day, n: number): Day => {
 ## なぜ単一パッケージ + サブパス export か
 
 - `npm install` 1 回で済む。バージョン整合の管理対象も 1 つ
-- バンドラの tree-shaking が未使用サブパスを除去。`import { datex } from 'datex'` だけなら JSON DSL も祝日データもバンドルに入らない
-- Node SSR / 非バンドル環境でもサブパスは別 JS ファイルなので、`datex/locale/jp` は import した時にだけロードされる
+- バンドラの tree-shaking が未使用サブパスを除去。`import { datex } from 'koyomify'` だけなら JSON DSL も祝日データもバンドルに入らない
+- Node SSR / 非バンドル環境でもサブパスは別 JS ファイルなので、`koyomify/locale/jp` は import した時にだけロードされる
 - `@holiday-jp/holiday_jp` を **optional な peerDependency** にしてあるので、祝日が要らない人は実物を持たなくて良い
 
 ## 開発

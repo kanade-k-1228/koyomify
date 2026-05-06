@@ -1,4 +1,4 @@
-# datex
+# koyomify
 
 **English** | [日本語](./README.ja.md)
 
@@ -9,8 +9,8 @@ Lets you write business-calendar rules ("schedule A on weekdays in summer, B on 
 The `Day` class itself is minimal — an immutable date box plus a single pipeline application port `.$`. Lookups, shifts, predicates, and comparisons are exported as external pure functions you compose with `d.$(month(+2)).$(beginOfMonth)`.
 
 ```ts
-import { datex, month, beginOfMonth, isWeekend } from 'datex';
-import { isHoliday } from 'datex/locale/jp';
+import { datex, month, beginOfMonth, isWeekend } from 'koyomify';
+import { isHoliday } from 'koyomify/locale/jp';
 
 datex('2026-01-31').$(month(+1)).$(beginOfMonth).toString();  // '2026-02-01'
 datex('2026-01-01').$(isHoliday);                             // true
@@ -20,27 +20,27 @@ datex('2026-04-18').$(isWeekend);                             // true
 ## Install
 
 ```sh
-npm install datex
-# Optional: required only if you import from 'datex/locale/jp'
+npm install koyomify
+# Optional: required only if you import from 'koyomify/locale/jp'
 npm install @holiday-jp/holiday_jp
 ```
 
-`@holiday-jp/holiday_jp` is an optional `peerDependency`. If you never import `datex/locale/jp`, you don't need it.
+`@holiday-jp/holiday_jp` is an optional `peerDependency`. If you never import `koyomify/locale/jp`, you don't need it.
 
 ## Subpaths
 
 | Path               | Description                                                                  |
 | ------------------ | ---------------------------------------------------------------------------- |
-| `datex`            | Core: `Day` class + pipeline functions (no runtime deps)                     |
-| `datex/match`      | Date-match rule engine over a plain JS object (JSON / YAML loaders all work) (no runtime deps) |
-| `datex/locale/jp`   | Japan-specific predicates and helpers (peer-deps `@holiday-jp/holiday_jp`)   |
-| `datex/locale/<cc>` | Future country-specific subpaths follow the same shape (`us`, `uk`, ...)     |
+| `koyomify`            | Core: `Day` class + pipeline functions (no runtime deps)                     |
+| `koyomify/match`      | Date-match rule engine over a plain JS object (JSON / YAML loaders all work) (no runtime deps) |
+| `koyomify/locale/jp`   | Japan-specific predicates and helpers (peer-deps `@holiday-jp/holiday_jp`)   |
+| `koyomify/locale/<cc>` | Future country-specific subpaths follow the same shape (`us`, `uk`, ...)     |
 
 ## Quick start
 
 ```ts
-import { datex, type Day, isWeekend, inRange, week, prev } from 'datex';
-import { isHoliday } from 'datex/locale/jp';
+import { datex, type Day, isWeekend, inRange, week, prev } from 'koyomify';
+import { isHoliday } from 'koyomify/locale/jp';
 
 const ferry = (d: Day): string =>
   d.$(inRange('2026-07-28', '2026-08-31')) && (
@@ -135,7 +135,7 @@ d2 - d1           // day delta (number)
 d1.$(eq(d2))      // value equality (preferred — === is identity-strict)
 ```
 
-## API: core (`datex`)
+## API: core (`koyomify`)
 
 ### Constructors
 
@@ -161,14 +161,14 @@ d1.$(eq(d2))      // value equality (preferred — === is identity-strict)
 
 `eq(other)`, `before(other)`, `after(other)`, `daysTo(other)`, `sameMonth(other)`, `sameYear(other)`.
 
-## Subpath: `datex/match` — date-match rule engine
+## Subpath: `koyomify/match` — date-match rule engine
 
 For configuration-driven rules. Accepts a plain JS object — write it as a TS literal, or load it from JSON / YAML / TOML; whatever shape ends up in memory is the input. Each key is a condition expression (string), each value is either a leaf result or a nested rule object. Rules are evaluated top-down; the first matching key wins. Use the special key `_` for the default branch.
 
 ```ts
-import { datex } from 'datex';
-import { compile } from 'datex/match';
-import { isHoliday } from 'datex/locale/jp';
+import { datex } from 'koyomify';
+import { compile } from 'koyomify/match';
+import { isHoliday } from 'koyomify/locale/jp';
 
 const ferry = compile({
   'range("2026-07-28", "2026-08-31")': {
@@ -223,7 +223,7 @@ Because the rule shape is a plain JS object, any loader works:
 
 ```ts
 import yaml from 'yaml';
-import { compile } from 'datex/match';
+import { compile } from 'koyomify/match';
 
 const rule = yaml.parse(await fs.readFile('schedule.yml', 'utf8'));
 const ferry = compile(rule, { predicates: { isHoliday } });
@@ -239,11 +239,11 @@ weekend: B
 _:       A
 ```
 
-## Subpath: `datex/locale/<country>`
+## Subpath: `koyomify/locale/<country>`
 
-Country-specific predicates and helpers live under `datex/locale/<cc>` so that adding a new locale doesn't pollute the core or other locales. Currently shipped:
+Country-specific predicates and helpers live under `koyomify/locale/<cc>` so that adding a new locale doesn't pollute the core or other locales. Currently shipped:
 
-### `datex/locale/jp` (Japan)
+### `koyomify/locale/jp` (Japan)
 
 `(d: Day) => boolean` predicates backed by [`@holiday-jp/holiday_jp`](https://github.com/holiday-jp/holiday_jp-js). Install the peer dep when you need it:
 
@@ -252,8 +252,8 @@ npm install @holiday-jp/holiday_jp
 ```
 
 ```ts
-import { datex } from 'datex';
-import { isHoliday } from 'datex/locale/jp';
+import { datex } from 'koyomify';
+import { isHoliday } from 'koyomify/locale/jp';
 
 datex('2026-01-01').$(isHoliday);  // true   (New Year's Day)
 datex('2026-05-04').$(isHoliday);  // true   (Greenery Day)
@@ -266,21 +266,21 @@ For locales not yet shipped, just write your own `(d: Day) => boolean` — the c
 
 ```ts
 import Holidays from 'date-holidays';
-import type { Day } from 'datex';
+import type { Day } from 'koyomify';
 
 const us = new Holidays('US');
 export const isHolidayUS = (d: Day): boolean => Boolean(us.isHoliday(d.toDate()));
 ```
 
-If you want it to ship with `datex` itself, contribute it as `src/locale/<cc>.ts` exposing `(d: Day) => T` functions — the same shape as `datex/locale/jp`.
+If you want it to ship with `koyomify` itself, contribute it as `src/locale/<cc>.ts` exposing `(d: Day) => T` functions — the same shape as `koyomify/locale/jp`.
 
 ## Recipes
 
 ### Last business day of the month
 
 ```ts
-import { datex, type Day, endOfMonth, prev, isWeekend, eq } from 'datex';
-import { isHoliday } from 'datex/locale/jp';
+import { datex, type Day, endOfMonth, prev, isWeekend, eq } from 'koyomify';
+import { isHoliday } from 'koyomify/locale/jp';
 
 const isLastBusinessDayOfMonth = (d: Day): boolean => {
   let last = d.$(endOfMonth);
@@ -292,8 +292,8 @@ const isLastBusinessDayOfMonth = (d: Day): boolean => {
 ### First business day of next month
 
 ```ts
-import { datex, type Day, month, beginOfMonth, next, isWeekend } from 'datex';
-import { isHoliday } from 'datex/locale/jp';
+import { datex, type Day, month, beginOfMonth, next, isWeekend } from 'koyomify';
+import { isHoliday } from 'koyomify/locale/jp';
 
 const firstBusinessDayOfNextMonth = (d: Day): Day => {
   let x = d.$(month(+1)).$(beginOfMonth);
@@ -305,8 +305,8 @@ const firstBusinessDayOfNextMonth = (d: Day): Day => {
 ### Add N business days
 
 ```ts
-import { datex, type Day, next, isWeekend } from 'datex';
-import { isHoliday } from 'datex/locale/jp';
+import { datex, type Day, next, isWeekend } from 'koyomify';
+import { isHoliday } from 'koyomify/locale/jp';
 
 const addBusinessDays = (d: Day, n: number): Day => {
   let cursor = d;
@@ -322,8 +322,8 @@ const addBusinessDays = (d: Day, n: number): Day => {
 ## Why a single package with subpaths?
 
 - One `npm install` instead of three. One version to coordinate.
-- Bundlers tree-shake unused subpaths. If you only `import { datex } from 'datex'`, neither the JSON DSL nor the holiday data ever land in your bundle.
-- For Node SSR / non-bundled environments, subpaths are separate JS files — `datex/locale/jp` is loaded only when imported.
+- Bundlers tree-shake unused subpaths. If you only `import { datex } from 'koyomify'`, neither the JSON DSL nor the holiday data ever land in your bundle.
+- For Node SSR / non-bundled environments, subpaths are separate JS files — `koyomify/locale/jp` is loaded only when imported.
 - `@holiday-jp/holiday_jp` is an *optional* peer dependency, so users who don't need Japanese holidays carry no runtime data.
 
 ## Development
